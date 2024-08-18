@@ -1,5 +1,5 @@
 // Default URL for the Unlayer editor script
-const defaultScriptUrl = 'https://editor.unlayer.com/embed.js?2';
+const defaultScriptUrl = "https://editor.unlayer.com/embed.js";
 
 // Array to store callback functions to be executed once the script is loaded
 const callbacks = [];
@@ -11,7 +11,7 @@ let loaded = false;
  * @returns {boolean} - True if the script is already injected, otherwise false
  */
 const isScriptInjected = (scriptUrl) => {
-    const scripts = document.querySelectorAll('script');
+    const scripts = document.querySelectorAll("script");
     let injected = false;
 
     scripts.forEach((script) => {
@@ -49,15 +49,12 @@ const runCallbacks = () => {
  * @param {function} callback - The callback function to execute
  * @param {string} [scriptUrl=defaultScriptUrl] - The URL of the script to load
  */
-export const loadScript = (
-    callback,
-    scriptUrl = defaultScriptUrl
-) => {
+export const loadScript = (callback, scriptUrl = defaultScriptUrl) => {
     addCallback(callback);
 
     if (!isScriptInjected(scriptUrl)) {
-        const embedScript = document.createElement('script');
-        embedScript.setAttribute('src', scriptUrl);
+        const embedScript = document.createElement("script");
+        embedScript.setAttribute("src", scriptUrl);
         embedScript.onload = () => {
             loaded = true;
             runCallbacks();
@@ -77,12 +74,7 @@ export const loadScript = (
  * @param {string} options.uploadUrl - The URL to upload images
  * @returns {object} - The initialization object with state and init function
  */
-export default function initUnlayer({
-    state,
-    displayMode,
-    id,
-    uploadUrl,
-}) {
+export default function initUnlayer({ state, displayMode, id, uploadUrl }) {
     return {
         state,
 
@@ -91,59 +83,92 @@ export default function initUnlayer({
             loadScript(() => {
                 unlayer.init({
                     id: id,
-                    displayMode: displayMode
+                    displayMode: displayMode,
                 });
 
-                unlayer.registerCallback('image', (file, done) => {
+                unlayer.registerCallback("image", (file, done) => {
                     uploadImage(file.attachments[0], uploadUrl)
-                        .then(url => done({ progress: 100, url }))
-                        .catch(error => console.error('Image upload failed:', error));
+                        .then((url) => done({ progress: 100, url }))
+                        .catch((error) =>
+                            console.error("Image upload failed:", error)
+                        );
                 });
 
                 let internalUpdate = false;
                 let boot = true;
 
-                self.$watch('state', value => {
+                //tipo qui vorrei accedere a dei campi che ho in filamnent
+
+                self.$watch("state", (value) => {
                     if (!internalUpdate) {
                         let design = value.design !== undefined ? value.design : value;
                         unlayer.loadDesign(JSON.parse(JSON.stringify(design)));
                         boot = false;
-                        unlayer.exportHtml(data => {
+                        unlayer.exportHtml((data) => {
                             internalUpdate = true;
                             if (self.state) {
-                                self.state = { html: data.html, design: JSON.parse(JSON.stringify(data.design)) };
+                                console.log("stato aggiornato", self.state);
+                                self.state = {
+                                    html: data.html,
+                                    design: JSON.parse(
+                                        JSON.stringify(data.design)
+                                    ),
+                                };
                             }
                             let el = document.getElementById(id);
                             if (el) {
                                 el.dirty = true;
                             }
-                            
+
                             boot = false;
                         });
                     }
                     internalUpdate = false;
                 });
 
-                unlayer.addEventListener('design:updated', () => {
-                    unlayer.exportHtml(data => {
+                unlayer.addEventListener("design:updated", () => {
+                    unlayer.exportHtml((data) => {
                         if (!boot) {
                             internalUpdate = true; // Set flag before updating state
                         }
                         if (self.state) {
-                            self.state = boot ? { html: self.state.html, design: JSON.parse(JSON.stringify(self.state.design)) }
-                                              : { html: data.html, design: JSON.parse(JSON.stringify(data.design)) };
+
+                            if (typeof self.state === "string") { //se è una stringa vuol dire che è una campo salvato in filament
+                                //faccio il parse in json in modo da settare i dati
+                                console.log("stato", JSON.parse(self.state));
+                                const savedState = JSON.parse(self.state);
+                                self.state = {
+                                    html: savedState.html,
+                                    design: JSON.parse(JSON.stringify(savedState.design)
+                                    ),
+                                };
+                            }
+
+                            self.state = boot
+                                ? {
+                                      html: self.state.html,
+                                      design: JSON.parse(
+                                          JSON.stringify(self.state.design)
+                                      ),
+                                  }
+                                : {
+                                      html: data.html,
+                                      design: JSON.parse(
+                                          JSON.stringify(data.design)
+                                      ),
+                                  };
                         }
                         let el = document.getElementById(id);
                         if (el) {
                             el.dirty = true;
                         }
-                        
+
                         boot = false;
                     });
                 });
             });
-        }
-    }
+        },
+    };
 }
 
 /**
@@ -154,28 +179,30 @@ export default function initUnlayer({
  */
 function uploadImage(file, uploadUrl) {
     let data = new FormData();
-    data.append('file', file);
+    data.append("file", file);
 
     return fetch(uploadUrl, {
-        method: 'POST',
+        method: "POST",
         headers: {
-            'Accept': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+            Accept: "application/json",
+            "X-CSRF-TOKEN": document
+                .querySelector('meta[name="csrf-token"]')
+                .getAttribute("content"),
         },
-        body: data
+        body: data,
     })
-    .then(response => {
-        if (response.ok) {
-            return response.json();
-        }
-        throw new Error('Network response was not ok.');
-    })
-    .then(data => data.file.url);
+        .then((response) => {
+            if (response.ok) {
+                return response.json();
+            }
+            throw new Error("Network response was not ok.");
+        })
+        .then((data) => data.file.url);
 }
 
-// Initialize Unlayer editor when the DOM content is fully loaded
-document.addEventListener('DOMContentLoaded', () => {
-    if (typeof Alpine !== 'undefined') {
-        Alpine.data('initUnlayer', initUnlayer);
-    }
-});
+// // Initialize Unlayer editor when the DOM content is fully loaded
+// document.addEventListener("DOMContentLoaded", () => {
+//     if (typeof Alpine !== "undefined") {
+//         Alpine.data("initUnlayer", initUnlayer);
+//     }
+// });
